@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [v1.2.0] — 2026-03-28
+
+### Fixed
+- Removed deprecated `curl_close()` call in `S3Driver`; the function has been a no-op since PHP 8.0 and is deprecated in PHP 8.5
+
+---
+
 ## [v1.1.0] — 2026-03-28
 
 ### Added
