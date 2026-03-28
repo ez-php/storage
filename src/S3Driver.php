@@ -150,6 +150,60 @@ final class S3Driver implements StorageInterface
     }
 
     /**
+     * {@inheritdoc}
+     *
+     * Downloads the S3 object body into a PHP in-memory stream (php://memory)
+     * and returns the rewound resource. For very large objects consider using
+     * pre-signed URLs and streaming directly from the CDN instead.
+     */
+    public function getStream(string $path): mixed
+    {
+        $response = $this->request('GET', $path);
+
+        if ($response['status'] === 404) {
+            throw new StorageException("File not found: {$path}");
+        }
+
+        if ($response['status'] < 200 || $response['status'] >= 300) {
+            throw new StorageException(
+                "Failed to read file: {$path} (HTTP {$response['status']})"
+            );
+        }
+
+        $stream = fopen('php://memory', 'r+b');
+
+        if ($stream === false) {
+            throw new StorageException("Failed to allocate memory stream for: {$path}");
+        }
+
+        fwrite($stream, $response['body']);
+        rewind($stream);
+
+        return $stream;
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * Reads the stream into memory and uploads via the S3 PutObject API.
+     * For very large files consider using S3 multipart upload instead.
+     */
+    public function putStream(string $path, mixed $stream): bool
+    {
+        if (!is_resource($stream)) {
+            throw new StorageException('putStream() requires a valid resource.');
+        }
+
+        $contents = stream_get_contents($stream);
+
+        if ($contents === false) {
+            throw new StorageException("Failed to read from stream for: {$path}");
+        }
+
+        return $this->put($path, $contents);
+    }
+
+    /**
      * Generate a presigned GET URL for the given object path.
      *
      * @param string $path Relative object path.

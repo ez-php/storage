@@ -91,6 +91,55 @@ final class LocalDriver implements StorageInterface
     /**
      * {@inheritdoc}
      */
+    public function getStream(string $path): mixed
+    {
+        $fullPath = $this->fullPath($path);
+
+        if (!file_exists($fullPath)) {
+            throw new StorageException("File not found: {$path}");
+        }
+
+        $stream = fopen($fullPath, 'rb');
+
+        if ($stream === false) {
+            throw new StorageException("Failed to open stream for: {$path}");
+        }
+
+        return $stream;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
+    public function putStream(string $path, mixed $stream): bool
+    {
+        if (!is_resource($stream)) {
+            throw new StorageException('putStream() requires a valid resource.');
+        }
+
+        $fullPath = $this->fullPath($path);
+
+        $this->ensureDirectory(dirname($fullPath));
+
+        $dest = fopen($fullPath, 'wb');
+
+        if ($dest === false) {
+            throw new StorageException("Failed to open destination for writing: {$path}");
+        }
+
+        $copied = stream_copy_to_stream($stream, $dest);
+        fclose($dest);
+
+        if ($copied === false) {
+            throw new StorageException("Failed to write stream to: {$path}");
+        }
+
+        return true;
+    }
+
+    /**
+     * {@inheritdoc}
+     */
     public function putUploadedFile(string $path, UploadedFile $file): bool
     {
         if (!$file->isValid()) {

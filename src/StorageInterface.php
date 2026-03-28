@@ -81,4 +81,34 @@ interface StorageInterface
      * @return bool True on success.
      */
     public function putUploadedFile(string $path, UploadedFile $file): bool;
+
+    /**
+     * Open a readable stream for the given file path.
+     *
+     * For LocalDriver this is a standard fopen() resource.
+     * For S3Driver the object body is piped into a memory stream.
+     *
+     * @param string $path Relative path within the storage.
+     *
+     * @throws StorageException If the file cannot be opened for reading.
+     *
+     * @return resource Readable stream resource.
+     */
+    public function getStream(string $path): mixed;
+
+    /**
+     * Write the contents of a stream to the given file path.
+     *
+     * For LocalDriver this uses stream_copy_to_stream() to avoid loading the
+     * full content into memory. For S3Driver the stream is read in chunks and
+     * uploaded via the S3 PutObject API.
+     *
+     * @param string   $path   Relative path within the storage.
+     * @param resource $stream Readable stream resource to read from.
+     *
+     * @throws StorageException If the stream cannot be read or the file cannot be written.
+     *
+     * @return bool True on success.
+     */
+    public function putStream(string $path, mixed $stream): bool;
 }
