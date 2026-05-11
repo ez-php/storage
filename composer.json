@@ -1,6 +1,6 @@
 {
     "name": "ez-php/storage",
-    "version": "1.10.0",
+    "version": "1.11.0",
     "description": "File storage abstraction for the ez-php framework — local filesystem and S3-compatible drivers",
     "type": "library",
     "license": "MIT",
