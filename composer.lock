@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2e69f8cd9b6b7c746a482e8403392d29",
+    "content-hash": "2d3d06d386dd5c12b34e8fc47abf5bee",
     "packages": [
         {
             "name": "ez-php/contracts",
-            "version": "1.11.1",
+            "version": "1.11.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/contracts.git",
-                "reference": "122082e99b38254ebba8898b76b4479237ae4fca"
+                "reference": "69cf8a7f139f91887d4c42490e9da3eea9d80dae"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/contracts/zipball/122082e99b38254ebba8898b76b4479237ae4fca",
-                "reference": "122082e99b38254ebba8898b76b4479237ae4fca",
+                "url": "https://api.github.com/repos/ez-php/contracts/zipball/69cf8a7f139f91887d4c42490e9da3eea9d80dae",
+                "reference": "69cf8a7f139f91887d4c42490e9da3eea9d80dae",
                 "shasum": ""
             },
             "require": {
@@ -63,20 +63,20 @@
                 "issues": "https://github.com/ez-php/contracts/issues",
                 "source": "https://github.com/ez-php/contracts"
             },
-            "time": "2026-05-11T20:59:27+00:00"
+            "time": "2026-06-22T23:14:16+00:00"
         },
         {
             "name": "ez-php/http",
-            "version": "1.11.1",
+            "version": "1.11.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/http.git",
-                "reference": "035df200dd21b1e55bf2d64320145e5dd555158e"
+                "reference": "404814c2bd71b8a9104f1c9e05f4c347fb46a10c"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/http/zipball/035df200dd21b1e55bf2d64320145e5dd555158e",
-                "reference": "035df200dd21b1e55bf2d64320145e5dd555158e",
+                "url": "https://api.github.com/repos/ez-php/http/zipball/404814c2bd71b8a9104f1c9e05f4c347fb46a10c",
+                "reference": "404814c2bd71b8a9104f1c9e05f4c347fb46a10c",
                 "shasum": ""
             },
             "require": {
@@ -120,7 +120,7 @@
                 "issues": "https://github.com/ez-php/http/issues",
                 "source": "https://github.com/ez-php/http"
             },
-            "time": "2026-05-11T20:59:32+00:00"
+            "time": "2026-06-22T23:14:20+00:00"
         }
     ],
     "packages-dev": [
@@ -525,16 +525,16 @@
         },
         {
             "name": "ez-php/docker",
-            "version": "1.11.1",
+            "version": "1.11.2",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/docker.git",
-                "reference": "b4876286c3e6eb93d78f57099e920a07ba6ae1a5"
+                "reference": "b7f3a2e8423c433ccbbe5ed9def21f2fc946c970"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/docker/zipball/b4876286c3e6eb93d78f57099e920a07ba6ae1a5",
-                "reference": "b4876286c3e6eb93d78f57099e920a07ba6ae1a5",
+                "url": "https://api.github.com/repos/ez-php/docker/zipball/b7f3a2e8423c433ccbbe5ed9def21f2fc946c970",
+                "reference": "b7f3a2e8423c433ccbbe5ed9def21f2fc946c970",
                 "shasum": ""
             },
             "require": {
@@ -552,9 +552,9 @@
             "description": "Docker base image source and scaffolding stubs for ez-php modules and projects",
             "support": {
                 "issues": "https://github.com/ez-php/docker/issues",
-                "source": "https://github.com/ez-php/docker/tree/v1.11.1"
+                "source": "https://github.com/ez-php/docker/tree/v1.11.2"
             },
-            "time": "2026-05-11T20:59:31+00:00"
+            "time": "2026-06-22T23:14:19+00:00"
         },
         {
             "name": "fidry/cpu-core-counter",
