@@ -160,11 +160,40 @@ final class LocalDriver implements StorageInterface
      *
      * @param string $path Relative path.
      *
+     * @throws StorageException If the path contains a `.` or `..` segment
+     *                          that could escape the storage root.
+     *
      * @return string Absolute path within the storage root.
      */
     private function fullPath(string $path): string
     {
-        return rtrim($this->root, '/') . '/' . ltrim($path, '/');
+        return rtrim($this->root, '/') . '/' . $this->assertSafeRelativePath($path);
+    }
+
+    /**
+     * Reject a path containing `.` or `..` segments, which could otherwise
+     * be used to escape the storage root (e.g. `../../etc/passwd`).
+     *
+     * Checked segment-by-segment rather than via `realpath()` so this also
+     * works for paths that do not exist yet (e.g. `put()` of a new file).
+     *
+     * @param string $path Relative path as supplied by the caller.
+     *
+     * @throws StorageException If the path contains a `.` or `..` segment.
+     *
+     * @return string The path, unmodified, once validated.
+     */
+    private function assertSafeRelativePath(string $path): string
+    {
+        $trimmed = ltrim($path, '/');
+
+        foreach (explode('/', $trimmed) as $segment) {
+            if ($segment === '.' || $segment === '..') {
+                throw new StorageException("Invalid path: {$path}");
+            }
+        }
+
+        return $trimmed;
     }
 
     /**

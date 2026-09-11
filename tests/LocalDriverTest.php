@@ -73,6 +73,52 @@ final class LocalDriverTest extends TestCase
         $this->assertFalse($this->driver->delete('nonexistent.txt'));
     }
 
+    public function testGetRejectsPathTraversal(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->get('../../etc/passwd');
+    }
+
+    public function testPutRejectsPathTraversal(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->put('../escape.txt', 'nope');
+    }
+
+    public function testPutRejectsPathTraversalInNestedSegment(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->put('a/../../escape.txt', 'nope');
+    }
+
+    public function testExistsRejectsPathTraversal(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->exists('../outside.txt');
+    }
+
+    public function testDeleteRejectsPathTraversal(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->delete('../outside.txt');
+    }
+
+    public function testPathTraversalCannotEscapeStorageRoot(): void
+    {
+        // Even if the exception guard were ever removed, confirm intent:
+        // a traversal attempt must not be able to read a file the parent
+        // directory of the storage root, proving containment end-to-end.
+        $outsideFile = dirname($this->tmpDir) . '/outside-' . uniqid('', true) . '.txt';
+        file_put_contents($outsideFile, 'secret');
+
+        try {
+            $this->expectException(StorageException::class);
+            $this->driver->get('../' . basename($outsideFile));
+        } finally {
+            @unlink($outsideFile);
+        }
+    }
+
     public function testUrlAppendsPathToBaseUrl(): void
     {
         $this->assertSame(

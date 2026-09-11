@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests;
 
 use EzPhp\Storage\S3Driver;
+use EzPhp\Storage\StorageException;
 
 /**
  * Class S3DriverTest
@@ -62,5 +63,31 @@ final class S3DriverTest extends TestCase
         $driver = new S3Driver('key', 'secret', 'us-east-1', 'my-bucket', null, 'https://cdn.example.com');
 
         $this->assertSame('https://cdn.example.com/images/photo.jpg', $driver->url('images/photo.jpg'));
+    }
+
+    public function testCustomUrlRejectsPathTraversal(): void
+    {
+        $driver = new S3Driver('key', 'secret', 'us-east-1', 'my-bucket', null, 'https://cdn.example.com');
+
+        $this->expectException(StorageException::class);
+        $driver->url('../other-tenant/secret.txt');
+    }
+
+    public function testPresignedUrlRejectsPathTraversal(): void
+    {
+        // No custom $url configured, so url() falls through to presignedUrl(),
+        // which must reject the traversal before ever contacting S3.
+        $driver = new S3Driver('key', 'secret', 'us-east-1', 'my-bucket');
+
+        $this->expectException(StorageException::class);
+        $driver->url('../other-tenant/secret.txt');
+    }
+
+    public function testPutRejectsPathTraversal(): void
+    {
+        $driver = new S3Driver('key', 'secret', 'us-east-1', 'my-bucket');
+
+        $this->expectException(StorageException::class);
+        $driver->put('../other-tenant/secret.txt', 'contents');
     }
 }

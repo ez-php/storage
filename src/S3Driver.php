@@ -106,7 +106,7 @@ final class S3Driver implements StorageInterface
     public function url(string $path): string
     {
         if ($this->url !== null) {
-            return rtrim($this->url, '/') . '/' . ltrim($path, '/');
+            return rtrim($this->url, '/') . '/' . $this->assertSafeRelativePath($path);
         }
 
         return $this->presignedUrl($path);
@@ -215,7 +215,7 @@ final class S3Driver implements StorageInterface
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
         $dateShort = substr($date, 0, 8);
-        $objectKey = '/' . ltrim($path, '/');
+        $objectKey = '/' . $this->assertSafeRelativePath($path);
         $scope = "{$dateShort}/{$this->region}/" . self::SERVICE . '/aws4_request';
         $credential = "{$this->key}/{$scope}";
 
@@ -261,7 +261,7 @@ final class S3Driver implements StorageInterface
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
         $dateShort = substr($date, 0, 8);
-        $objectKey = '/' . ltrim($path, '/');
+        $objectKey = '/' . $this->assertSafeRelativePath($path);
         $payloadHash = hash('sha256', $body);
 
         // Normalize header names to lowercase for canonical request
@@ -381,6 +381,30 @@ final class S3Driver implements StorageInterface
         $kService = hash_hmac('sha256', self::SERVICE, $kRegion, true);
 
         return hash_hmac('sha256', 'aws4_request', $kService, true);
+    }
+
+    /**
+     * Reject a path containing `.` or `..` segments, which could otherwise
+     * be used to address an unintended object key in the same bucket
+     * (e.g. `../other-tenant/secret.txt`).
+     *
+     * @param string $path Relative object path as supplied by the caller.
+     *
+     * @throws StorageException If the path contains a `.` or `..` segment.
+     *
+     * @return string The path, unmodified, once validated.
+     */
+    private function assertSafeRelativePath(string $path): string
+    {
+        $trimmed = ltrim($path, '/');
+
+        foreach (explode('/', $trimmed) as $segment) {
+            if ($segment === '.' || $segment === '..') {
+                throw new StorageException("Invalid path: {$path}");
+            }
+        }
+
+        return $trimmed;
     }
 
     /**
