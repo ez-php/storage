@@ -113,6 +113,30 @@ $driver->put('report.pdf', file_get_contents('/tmp/report.pdf'));
 $driver->url('report.pdf'); // presigned URL
 ```
 
+### InMemoryDriver (tests only)
+
+Keeps file contents in a PHP array — no filesystem, no network. Use it to test code
+that depends on `StorageInterface` without writing real files.
+
+```php
+use EzPhp\Storage\InMemoryDriver;
+
+$driver = new InMemoryDriver();
+$driver->put('invoices/2026.pdf', $bytes);
+
+$driver->exists('invoices/2026.pdf'); // true
+$driver->url('invoices/2026.pdf');    // memory://invoices/2026.pdf
+$driver->all();                       // ['invoices/2026.pdf' => $bytes]
+$driver->flush();                     // reset between tests
+```
+
+Set `STORAGE_DRIVER=memory` to use it via the service provider.
+
+- Rejects `..` path segments exactly like `LocalDriver`, so a traversal bug cannot pass
+  against the double and then fail against the real driver.
+- Supports the full interface, streams included (`getStream()`/`putStream()` use `php://memory`).
+- **Not for production.** Nothing is persisted or shared between processes.
+
 ---
 
 ## Running Tests

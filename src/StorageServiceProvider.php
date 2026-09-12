@@ -14,7 +14,7 @@ use EzPhp\Contracts\ServiceProvider;
  * Reads the storage configuration and binds the active StorageInterface
  * driver to the container. Also wires the Storage static façade.
  *
- * Supported drivers: local (default), s3.
+ * Supported drivers: local (default), s3, memory (in-process; tests only).
  *
  * @package EzPhp\Storage
  */
@@ -32,6 +32,7 @@ final class StorageServiceProvider extends ServiceProvider
 
             $storage = match ($driver) {
                 's3' => $this->makeS3($config),
+                'memory' => new InMemoryDriver(),
                 default => $this->makeLocal($config),
             };
 
