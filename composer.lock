@@ -4,30 +4,30 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "2a5a5ed702d71c51c5e40e26ad7e12c9",
+    "content-hash": "0de6c0b496db6583024f5c73ff1341f3",
     "packages": [
         {
             "name": "ez-php/contracts",
-            "version": "1.14.0",
+            "version": "2.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/contracts.git",
-                "reference": "956ed7d890e51ece41f1a302a9117ea0a394a2a0"
+                "reference": "843c1e93756fa64624983640ccbe2b9ea3f4701d"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/contracts/zipball/956ed7d890e51ece41f1a302a9117ea0a394a2a0",
-                "reference": "956ed7d890e51ece41f1a302a9117ea0a394a2a0",
+                "url": "https://api.github.com/repos/ez-php/contracts/zipball/843c1e93756fa64624983640ccbe2b9ea3f4701d",
+                "reference": "843c1e93756fa64624983640ccbe2b9ea3f4701d",
                 "shasum": ""
             },
             "require": {
                 "ext-pdo": "*",
-                "ez-php/http": "^1.0",
+                "ez-php/http": "^2.0",
                 "php": "^8.5"
             },
             "require-dev": {
-                "ez-php/docker": "^1.0",
-                "ez-php/testing-application": "^1.0",
+                "ez-php/docker": "^2.0",
+                "ez-php/testing-application": "^2.0",
                 "friendsofphp/php-cs-fixer": "^3.94",
                 "phpstan/phpstan": "^2.1",
                 "phpstan/phpstan-deprecation-rules": "^2.0",
@@ -63,28 +63,28 @@
                 "issues": "https://github.com/ez-php/contracts/issues",
                 "source": "https://github.com/ez-php/contracts"
             },
-            "time": "2026-09-13T00:19:49+00:00"
+            "time": "2026-09-13T03:09:42+00:00"
         },
         {
             "name": "ez-php/http",
-            "version": "1.14.0",
+            "version": "2.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/http.git",
-                "reference": "b21d1b3d2843c0a57624d512d3146d62d1156b89"
+                "reference": "238c3d51646f9c9ca4ce56870b27f831cb1e731f"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/http/zipball/b21d1b3d2843c0a57624d512d3146d62d1156b89",
-                "reference": "b21d1b3d2843c0a57624d512d3146d62d1156b89",
+                "url": "https://api.github.com/repos/ez-php/http/zipball/238c3d51646f9c9ca4ce56870b27f831cb1e731f",
+                "reference": "238c3d51646f9c9ca4ce56870b27f831cb1e731f",
                 "shasum": ""
             },
             "require": {
                 "php": "^8.5"
             },
             "require-dev": {
-                "ez-php/docker": "^1.0",
-                "ez-php/testing-application": "^1.0",
+                "ez-php/docker": "^2.0",
+                "ez-php/testing-application": "^2.0",
                 "friendsofphp/php-cs-fixer": "^3.94",
                 "phpstan/phpstan": "^2.1",
                 "phpstan/phpstan-deprecation-rules": "^2.0",
@@ -120,7 +120,7 @@
                 "issues": "https://github.com/ez-php/http/issues",
                 "source": "https://github.com/ez-php/http"
             },
-            "time": "2026-09-13T00:19:57+00:00"
+            "time": "2026-09-13T03:09:46+00:00"
         }
     ],
     "packages-dev": [
@@ -525,16 +525,16 @@
         },
         {
             "name": "ez-php/docker",
-            "version": "1.14.0",
+            "version": "2.0.1",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/docker.git",
-                "reference": "568b21e2fcd30b2828c323b0921914681dc612ba"
+                "reference": "f072d36ef30c9cb664207f737ef3598a213e24d2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/docker/zipball/568b21e2fcd30b2828c323b0921914681dc612ba",
-                "reference": "568b21e2fcd30b2828c323b0921914681dc612ba",
+                "url": "https://api.github.com/repos/ez-php/docker/zipball/f072d36ef30c9cb664207f737ef3598a213e24d2",
+                "reference": "f072d36ef30c9cb664207f737ef3598a213e24d2",
                 "shasum": ""
             },
             "require": {
@@ -552,9 +552,9 @@
             "description": "Docker base image source and scaffolding stubs for ez-php modules and projects",
             "support": {
                 "issues": "https://github.com/ez-php/docker/issues",
-                "source": "https://github.com/ez-php/docker/tree/v1.14.0"
+                "source": "https://github.com/ez-php/docker/tree/v2.0.1"
             },
-            "time": "2026-09-13T00:19:54+00:00"
+            "time": "2026-09-13T03:09:44+00:00"
         },
         {
             "name": "fidry/cpu-core-counter",
