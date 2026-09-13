@@ -4,20 +4,20 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0de6c0b496db6583024f5c73ff1341f3",
+    "content-hash": "01bc8083fb46d611b164f99f3c8f4627",
     "packages": [
         {
             "name": "ez-php/contracts",
-            "version": "2.0.1",
+            "version": "2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/contracts.git",
-                "reference": "843c1e93756fa64624983640ccbe2b9ea3f4701d"
+                "reference": "1a91fab7301eedad0da64ecab9c64f3fa3b38082"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/contracts/zipball/843c1e93756fa64624983640ccbe2b9ea3f4701d",
-                "reference": "843c1e93756fa64624983640ccbe2b9ea3f4701d",
+                "url": "https://api.github.com/repos/ez-php/contracts/zipball/1a91fab7301eedad0da64ecab9c64f3fa3b38082",
+                "reference": "1a91fab7301eedad0da64ecab9c64f3fa3b38082",
                 "shasum": ""
             },
             "require": {
@@ -63,20 +63,20 @@
                 "issues": "https://github.com/ez-php/contracts/issues",
                 "source": "https://github.com/ez-php/contracts"
             },
-            "time": "2026-09-13T03:09:42+00:00"
+            "time": "2026-09-13T09:38:42+00:00"
         },
         {
             "name": "ez-php/http",
-            "version": "2.0.1",
+            "version": "2.1.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/ez-php/http.git",
-                "reference": "238c3d51646f9c9ca4ce56870b27f831cb1e731f"
+                "reference": "722898ef63d7cb8982cd64edab5330dab3e33710"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/ez-php/http/zipball/238c3d51646f9c9ca4ce56870b27f831cb1e731f",
-                "reference": "238c3d51646f9c9ca4ce56870b27f831cb1e731f",
+                "url": "https://api.github.com/repos/ez-php/http/zipball/722898ef63d7cb8982cd64edab5330dab3e33710",
+                "reference": "722898ef63d7cb8982cd64edab5330dab3e33710",
                 "shasum": ""
             },
             "require": {
@@ -120,7 +120,7 @@
                 "issues": "https://github.com/ez-php/http/issues",
                 "source": "https://github.com/ez-php/http"
             },
-            "time": "2026-09-13T03:09:46+00:00"
+            "time": "2026-09-13T09:38:48+00:00"
         }
     ],
     "packages-dev": [
