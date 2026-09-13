@@ -215,7 +215,7 @@ final class S3Driver implements StorageInterface
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
         $dateShort = substr($date, 0, 8);
-        $objectKey = '/' . $this->assertSafeRelativePath($path);
+        $objectKey = $this->uriEncodePath('/' . $this->assertSafeRelativePath($path));
         $scope = "{$dateShort}/{$this->region}/" . self::SERVICE . '/aws4_request';
         $credential = "{$this->key}/{$scope}";
 
@@ -261,7 +261,7 @@ final class S3Driver implements StorageInterface
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
         $dateShort = substr($date, 0, 8);
-        $objectKey = '/' . $this->assertSafeRelativePath($path);
+        $objectKey = $this->uriEncodePath('/' . $this->assertSafeRelativePath($path));
         $payloadHash = hash('sha256', $body);
 
         // Normalize header names to lowercase for canonical request
@@ -381,6 +381,29 @@ final class S3Driver implements StorageInterface
         $kService = hash_hmac('sha256', self::SERVICE, $kRegion, true);
 
         return hash_hmac('sha256', 'aws4_request', $kService, true);
+    }
+
+    /**
+     * URI-percent-encode an object key path for AWS Signature V4.
+     *
+     * SigV4's canonical-URI construction requires each path segment to be
+     * percent-encoded per RFC 3986 (uppercase hex, unreserved characters
+     * A-Za-z0-9-_.~ left unencoded) before it is used in the canonical request
+     * — and, since the actual request URL must match what was signed, the same
+     * encoding is applied to the URL sent to S3. `/` segment separators are
+     * preserved, never encoded. `rawurlencode()` already implements exactly
+     * this unreserved-character set, so each segment is encoded independently
+     * and rejoined — a single un-split rawurlencode() would also escape `/`.
+     * S3 does not double-encode the canonical URI (unlike most other AWS
+     * services), so this must be applied exactly once.
+     *
+     * @param string $path Leading-slash object key, e.g. '/my folder/file+name.txt'.
+     *
+     * @return string
+     */
+    private function uriEncodePath(string $path): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $path)));
     }
 
     /**

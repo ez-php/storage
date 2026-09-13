@@ -90,4 +90,23 @@ final class S3DriverTest extends TestCase
         $this->expectException(StorageException::class);
         $driver->put('../other-tenant/secret.txt', 'contents');
     }
+
+    /**
+     * Regression test: object keys containing a space or `+` must be
+     * percent-encoded in the presigned URL, matching what was actually signed
+     * in the canonical request — otherwise the URL sent to a client and the
+     * signature computed for it disagree, and real AWS S3 returns 403.
+     * presignedUrl() makes no network call, so this runs without credentials.
+     */
+    public function testPresignedUrlPercentEncodesSpecialCharactersInObjectKey(): void
+    {
+        $driver = new S3Driver('key', 'secret', 'us-east-1', 'my-bucket');
+
+        $url = $driver->url('my folder/file+name.txt');
+        $path = (string) parse_url($url, PHP_URL_PATH);
+
+        $this->assertStringContainsString('my%20folder/file%2Bname.txt', $path);
+        $this->assertStringNotContainsString(' ', $path);
+        $this->assertStringNotContainsString('+', $path);
+    }
 }
