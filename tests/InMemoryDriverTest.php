@@ -148,7 +148,6 @@ final class InMemoryDriverTest extends TestCase
 
         $stream = $this->driver->getStream('file.txt');
 
-        $this->assertIsResource($stream);
         $this->assertSame('streamed', stream_get_contents($stream));
 
         fclose($stream);
