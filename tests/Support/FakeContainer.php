@@ -66,6 +66,11 @@ final class FakeContainer implements ContainerInterface
         $this->instances[$abstract] = $instance;
     }
 
+    public function has(string $abstract): bool
+    {
+        return isset($this->instances[$abstract]) || isset($this->bindings[$abstract]);
+    }
+
     public function wasBound(string $abstract): bool
     {
         return isset($this->bindings[$abstract]);
