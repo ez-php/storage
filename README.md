@@ -35,6 +35,7 @@ return [
         'endpoint'   => env('AWS_ENDPOINT'),   // optional: MinIO, R2, etc.
         'url'        => env('AWS_URL'),         // optional: CDN base URL
         'url_expiry' => 3600,
+        'multipart_part_size' => 8 * 1024 * 1024, // putStream(): larger streams use multipart upload
     ],
 
     'gcs' => [
@@ -112,6 +113,7 @@ Uploads and retrieves objects using cURL with AWS Signature Version 4. Works wit
 - `url()` returns a presigned GET URL (valid for `url_expiry` seconds)
 - If a custom `url` (CDN) is configured, `url()` returns `{url}/{path}` instead
 - Custom `endpoint` overrides the default `{bucket}.s3.{region}.amazonaws.com` host
+- `putStream()` uploads streams larger than `multipart_part_size` (default 8 MiB) with S3 multipart upload, one part in memory at a time; failed uploads are aborted. Parts must be ≥ 5 MiB except the last (S3 rule).
 
 ```php
 $driver = new S3Driver('key', 'secret', 'eu-west-1', 'my-bucket');

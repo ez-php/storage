@@ -77,6 +77,7 @@ final class StorageServiceProvider extends ServiceProvider
         $endpoint = $config->get('storage.s3.endpoint');
         $url = $config->get('storage.s3.url');
         $expiry = $config->get('storage.s3.url_expiry', 3600);
+        $partSize = $config->get('storage.s3.multipart_part_size', 8_388_608);
 
         return new S3Driver(
             is_string($key) ? $key : '',
@@ -86,6 +87,7 @@ final class StorageServiceProvider extends ServiceProvider
             is_string($endpoint) ? $endpoint : null,
             is_string($url) ? $url : null,
             is_int($expiry) ? $expiry : 3600,
+            is_int($partSize) && $partSize > 0 ? $partSize : 8_388_608,
         );
     }
 

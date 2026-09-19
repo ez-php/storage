@@ -262,6 +262,7 @@ tests/
   TestCase.php                — extends PHPUnit\Framework\TestCase (no framework dependency)
   LocalDriverTest.php         — unit tests for LocalDriver using a temp directory
   S3DriverTest.php            — integration tests; skipped without AWS credentials
+  S3DriverMultipartTest.php   — multipart putStream() against an injected fake S3 transport; no network
   GcsDriverTest.php           — integration tests; skipped without GCS credentials
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
@@ -281,7 +282,7 @@ tests/
 
 **`LocalDriver`** — PHP filesystem implementation. `fullPath()` resolves relative paths against the configured root. `ensureDirectory()` creates parent directories with `mkdir($dir, 0755, true)`.
 
-**`S3Driver`** — cURL-based S3 client. Signs requests with AWS Signature V4 (Authorization header for API calls, query-parameter signature for presigned URLs). `host()` derives the virtual-hosted-style AWS hostname or uses the configured custom endpoint. No external dependencies — only `ext-curl` and PHP hash functions.
+**`S3Driver`** — cURL-based S3 client (`putStream()` uses S3 multipart upload above `multipartPartSize`; the HTTP layer is replaceable via an optional `transport` closure). Signs requests with AWS Signature V4 (Authorization header for API calls, query-parameter signature for presigned URLs). `host()` derives the virtual-hosted-style AWS hostname or uses the configured custom endpoint. No external dependencies — only `ext-curl` and PHP hash functions.
 
 **`GcsDriver`** — cURL-based Google Cloud Storage client, using the GCS JSON API (`storage.googleapis.com/storage/v1/...` for metadata/read/delete, `storage.googleapis.com/upload/storage/v1/...` for writes). Authenticates with a caller-supplied OAuth2 Bearer access token — the driver never mints or refreshes tokens itself.
 
@@ -295,6 +296,8 @@ tests/
 - **`putUploadedFile` on S3Driver** — since `UploadedFile::moveTo()` uses `move_uploaded_file()` (HTTP-upload-only), the S3Driver moves the file to a system temp path first, reads the contents, uploads to S3, then deletes the temp file.
 - **Virtual-hosted-style S3 URLs** — the bucket is part of the hostname (`bucket.s3.region.amazonaws.com`), not the path. Custom endpoint support enables MinIO and Cloudflare R2 compatibility.
 - **Presigned URLs** — `S3Driver::url()` generates presigned GET URLs signed with `UNSIGNED-PAYLOAD`. Expiry defaults to 3600 seconds and is configurable. If a CDN `url` is set in config, direct CDN URLs are returned instead.
+- **`putStream()` uses multipart upload above `multipartPartSize` (default 8 MiB).** The stream is read one part at a time, so the object is never held in memory. A stream that fits in one part (peeked by reading a second chunk) still uses a single PutObject. Flow: `POST ?uploads` → `PUT ?partNumber&uploadId` per part (ETag from the response header) → `POST ?uploadId` with the part list. Any failure — non-2xx part, an `<Error>` body on a 200 Complete response, or an exception — triggers a best-effort `DELETE ?uploadId` so orphaned parts don't accrue charges; non-2xx returns `false` like `put()`, transport exceptions propagate. S3 requires parts ≥ 5 MiB (except the last); the driver does not enforce it, so tiny part sizes are for tests only. The query string is part of the SigV4 canonical request (sorted, RFC 3986-encoded).
+- **`S3Driver` gained an injectable HTTP `transport`** (optional last constructor argument, default cURL). It exists so the multipart protocol is unit-testable against a fake S3 instead of only against live credentials; `S3DriverTest` (live) is unchanged. `GcsDriver` still has no such seam. `put()`/`get()`/`delete()`/`exists()` are unchanged. `putUploadedFile()` still reads the file fully via `put()`.
 - **`GcsDriver` does not generate signed URLs** — unlike `S3Driver`, `GcsDriver::url()` returns a direct `storage.googleapis.com/{bucket}/{path}` URL (or a configured CDN `url` prefix), never a signed/expiring one. A true GCS V4 signed URL requires a service-account private key to sign with, which is a materially different (and heavier) auth story than the Bearer-token access-token approach used for every other request — out of scope here; put a CDN or a bucket/object ACL in front instead. This is a deliberate, documented limitation, not an oversight.
 - **Streaming is supported alongside the string API** — `put()`/`get()` operate on strings; `getStream()`/`putStream()` avoid materialising large files. `LocalDriver` uses `stream_copy_to_stream()`, `S3Driver` pipes the object body into a memory stream, `InMemoryDriver` wraps `php://memory`.
 - **`InMemoryDriver` is named for what it models, not how it is built** — The sibling test drivers in `cache`, `broadcast`, `feature-flags` and `rate-limiter` are called `ArrayDriver`, but those modules genuinely store key-value pairs. Storage models a filesystem; the backing array is an implementation detail, so the name says "in memory".
@@ -305,13 +308,14 @@ tests/
 
 - **No external services required** — LocalDriver tests use PHP's `sys_get_temp_dir()` and clean up after themselves.
 - **S3 integration tests are skipped** by default (`markTestSkipped` when credentials are absent). Run them by setting `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_BUCKET`.
+- **Multipart tests use a fake transport** injected into `S3Driver`, asserting the request sequence (initiate/parts/complete/abort), part bodies, the ETag part list, SigV4 headers on every call, key encoding and every failure path.
 - **GCS integration tests are skipped** the same way, unless `GCS_BUCKET` and `GCS_ACCESS_TOKEN` are set. Like `S3Driver`, `GcsDriver` has no mockable HTTP seam, so its behavior is only verified against a real bucket.
 - `StorageTest` tests the static façade isolation using `resetInstance()` in setUp/tearDown.
 - No framework application context is needed — `TestCase` extends plain `PHPUnit\Framework\TestCase`.
 
 ## What does NOT belong in this module
 
-- Chunked / multipart S3 or GCS uploads for very large objects — `putStream()` reads the stream in one pass; true multipart/resumable upload is a separate concern
+- Resumable/multipart upload for GCS, and parallel or resumable-after-crash part uploads for S3 — S3 parts are uploaded sequentially and a crashed upload is aborted, not resumed
 - Minting or refreshing GCS OAuth2 access tokens — `GcsDriver` only sends the token it is constructed with; obtaining one is the application's responsibility
 - Image resizing or file processing — belongs in a dedicated media module
 - Database-backed file metadata — belongs in the ORM module
