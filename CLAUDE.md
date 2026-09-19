@@ -254,6 +254,7 @@ src/
   StorageException.php        — thrown on read, write, delete, or upload failure
   LocalDriver.php             — filesystem driver; auto-creates nested directories
   S3Driver.php                — S3-compatible driver via cURL + AWS Signature V4
+  GcsDriver.php                — Google Cloud Storage driver via cURL + Bearer access token
   InMemoryDriver.php          — in-process driver for tests; no filesystem, no network
   Storage.php                 — static façade; wired by StorageServiceProvider
   StorageServiceProvider.php  — reads config/storage.php, binds StorageInterface
@@ -261,6 +262,7 @@ tests/
   TestCase.php                — extends PHPUnit\Framework\TestCase (no framework dependency)
   LocalDriverTest.php         — unit tests for LocalDriver using a temp directory
   S3DriverTest.php            — integration tests; skipped without AWS credentials
+  GcsDriverTest.php           — integration tests; skipped without GCS credentials
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
 ```
@@ -281,9 +283,11 @@ tests/
 
 **`S3Driver`** — cURL-based S3 client. Signs requests with AWS Signature V4 (Authorization header for API calls, query-parameter signature for presigned URLs). `host()` derives the virtual-hosted-style AWS hostname or uses the configured custom endpoint. No external dependencies — only `ext-curl` and PHP hash functions.
 
+**`GcsDriver`** — cURL-based Google Cloud Storage client, using the GCS JSON API (`storage.googleapis.com/storage/v1/...` for metadata/read/delete, `storage.googleapis.com/upload/storage/v1/...` for writes). Authenticates with a caller-supplied OAuth2 Bearer access token — the driver never mints or refreshes tokens itself.
+
 **`Storage`** — static façade backed by a `?StorageInterface $instance`. `setInstance()` is called in `StorageServiceProvider::register()`. `resetInstance()` is used in tests.
 
-**`StorageServiceProvider`** — reads `storage.driver` from config; instantiates and binds `LocalDriver` or `S3Driver` accordingly.
+**`StorageServiceProvider`** — reads `storage.driver` from config; instantiates and binds `LocalDriver`, `S3Driver`, or `GcsDriver` accordingly.
 
 ## Design decisions and constraints
 
@@ -291,6 +295,7 @@ tests/
 - **`putUploadedFile` on S3Driver** — since `UploadedFile::moveTo()` uses `move_uploaded_file()` (HTTP-upload-only), the S3Driver moves the file to a system temp path first, reads the contents, uploads to S3, then deletes the temp file.
 - **Virtual-hosted-style S3 URLs** — the bucket is part of the hostname (`bucket.s3.region.amazonaws.com`), not the path. Custom endpoint support enables MinIO and Cloudflare R2 compatibility.
 - **Presigned URLs** — `S3Driver::url()` generates presigned GET URLs signed with `UNSIGNED-PAYLOAD`. Expiry defaults to 3600 seconds and is configurable. If a CDN `url` is set in config, direct CDN URLs are returned instead.
+- **`GcsDriver` does not generate signed URLs** — unlike `S3Driver`, `GcsDriver::url()` returns a direct `storage.googleapis.com/{bucket}/{path}` URL (or a configured CDN `url` prefix), never a signed/expiring one. A true GCS V4 signed URL requires a service-account private key to sign with, which is a materially different (and heavier) auth story than the Bearer-token access-token approach used for every other request — out of scope here; put a CDN or a bucket/object ACL in front instead. This is a deliberate, documented limitation, not an oversight.
 - **Streaming is supported alongside the string API** — `put()`/`get()` operate on strings; `getStream()`/`putStream()` avoid materialising large files. `LocalDriver` uses `stream_copy_to_stream()`, `S3Driver` pipes the object body into a memory stream, `InMemoryDriver` wraps `php://memory`.
 - **`InMemoryDriver` is named for what it models, not how it is built** — The sibling test drivers in `cache`, `broadcast`, `feature-flags` and `rate-limiter` are called `ArrayDriver`, but those modules genuinely store key-value pairs. Storage models a filesystem; the backing array is an implementation detail, so the name says "in memory".
 - **`InMemoryDriver` rejects `..` even though it has no root to escape** — A test double must fail the same way the real driver does. If it silently accepted a traversing path, a traversal bug would pass its tests and only surface against `LocalDriver` in production.
@@ -300,12 +305,14 @@ tests/
 
 - **No external services required** — LocalDriver tests use PHP's `sys_get_temp_dir()` and clean up after themselves.
 - **S3 integration tests are skipped** by default (`markTestSkipped` when credentials are absent). Run them by setting `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_BUCKET`.
+- **GCS integration tests are skipped** the same way, unless `GCS_BUCKET` and `GCS_ACCESS_TOKEN` are set. Like `S3Driver`, `GcsDriver` has no mockable HTTP seam, so its behavior is only verified against a real bucket.
 - `StorageTest` tests the static façade isolation using `resetInstance()` in setUp/tearDown.
 - No framework application context is needed — `TestCase` extends plain `PHPUnit\Framework\TestCase`.
 
 ## What does NOT belong in this module
 
-- Chunked / multipart S3 uploads for very large objects — `putStream()` reads the stream in one pass; true multipart upload is a separate concern
+- Chunked / multipart S3 or GCS uploads for very large objects — `putStream()` reads the stream in one pass; true multipart/resumable upload is a separate concern
+- Minting or refreshing GCS OAuth2 access tokens — `GcsDriver` only sends the token it is constructed with; obtaining one is the application's responsibility
 - Image resizing or file processing — belongs in a dedicated media module
 - Database-backed file metadata — belongs in the ORM module
 - Serving files via HTTP (X-Accel-Redirect, range requests) — belongs in the framework HTTP layer

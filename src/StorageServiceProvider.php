@@ -14,7 +14,7 @@ use EzPhp\Contracts\ServiceProvider;
  * Reads the storage configuration and binds the active StorageInterface
  * driver to the container. Also wires the Storage static façade.
  *
- * Supported drivers: local (default), s3, memory (in-process; tests only).
+ * Supported drivers: local (default), s3, gcs, memory (in-process; tests only).
  *
  * @package EzPhp\Storage
  */
@@ -32,6 +32,7 @@ final class StorageServiceProvider extends ServiceProvider
 
             $storage = match ($driver) {
                 's3' => $this->makeS3($config),
+                'gcs' => $this->makeGcs($config),
                 'memory' => new InMemoryDriver(),
                 default => $this->makeLocal($config),
             };
@@ -85,6 +86,26 @@ final class StorageServiceProvider extends ServiceProvider
             is_string($endpoint) ? $endpoint : null,
             is_string($url) ? $url : null,
             is_int($expiry) ? $expiry : 3600,
+        );
+    }
+
+    /**
+     * Create a GcsDriver from config.
+     *
+     * @param ConfigInterface $config
+     *
+     * @return GcsDriver
+     */
+    private function makeGcs(ConfigInterface $config): GcsDriver
+    {
+        $bucket = $config->get('storage.gcs.bucket', '');
+        $accessToken = $config->get('storage.gcs.access_token', '');
+        $url = $config->get('storage.gcs.url');
+
+        return new GcsDriver(
+            is_string($bucket) ? $bucket : '',
+            is_string($accessToken) ? $accessToken : '',
+            is_string($url) ? $url : null,
         );
     }
 }
