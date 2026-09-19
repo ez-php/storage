@@ -253,7 +253,10 @@ src/
   StorageInterface.php        — put/get/delete/exists/url/putUploadedFile contract
   StorageException.php        — thrown on read, write, delete, or upload failure
   LocalDriver.php             — filesystem driver; auto-creates nested directories
-  S3Driver.php                — S3-compatible driver via cURL + AWS Signature V4
+  S3Driver.php                — S3-compatible driver via cURL: object operations, multipart upload, HTTP layer
+  S3Signer.php                — AWS Signature V4 (request Authorization header, presigned query string, path encoding); pure, no I/O
+  StorageResponse.php         — serve(): stream a stored file with Range/206/416; xAccelRedirect()/xSendfile(): hand the transfer to nginx/Apache
+  SignedUrl.php               — HMAC-signed, expiring links for files behind your own route (LocalDriver has no native presigning)
   GcsDriver.php                — Google Cloud Storage driver via cURL + Bearer access token
   InMemoryDriver.php          — in-process driver for tests; no filesystem, no network
   Storage.php                 — static façade; wired by StorageServiceProvider
@@ -263,6 +266,9 @@ tests/
   LocalDriverTest.php         — unit tests for LocalDriver using a temp directory
   S3DriverTest.php            — integration tests; skipped without AWS credentials
   S3DriverMultipartTest.php   — multipart putStream() against an injected fake S3 transport; no network
+  S3SignerTest.php            — SigV4 against the worked examples from the AWS documentation (Authorization header + presigned URL)
+  StorageResponseTest.php     — Range parsing (closed/open/suffix/clamped/unsatisfiable/ignored), 206/416/404, headers, X-Accel-Redirect, X-Sendfile
+  SignedUrlTest.php           — signing, expiry boundary, tampering with path/expiry/secret, malformed parts, verifyRequest()
   GcsDriverTest.php           — integration tests; skipped without GCS credentials
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
@@ -282,7 +288,13 @@ tests/
 
 **`LocalDriver`** — PHP filesystem implementation. `fullPath()` resolves relative paths against the configured root. `ensureDirectory()` creates parent directories with `mkdir($dir, 0755, true)`.
 
-**`S3Driver`** — cURL-based S3 client (`putStream()` uses S3 multipart upload above `multipartPartSize`; the HTTP layer is replaceable via an optional `transport` closure). Signs requests with AWS Signature V4 (Authorization header for API calls, query-parameter signature for presigned URLs). `host()` derives the virtual-hosted-style AWS hostname or uses the configured custom endpoint. No external dependencies — only `ext-curl` and PHP hash functions.
+**`S3Driver`** — cURL-based S3 client (`putStream()` uses S3 multipart upload above `multipartPartSize`; the HTTP layer is replaceable via an optional `transport` closure). Delegates all signing to `S3Signer`.
+
+**`S3Signer`** — AWS Signature V4: `signRequest()` (Authorization header for API calls), `presignQuery()` (query-parameter signature for presigned URLs), `encodePath()`. Takes the timestamp as an argument and does no I/O, so it is tested against fixed AWS vectors.
+
+**`StorageResponse`** — static helpers turning a stored file into an HTTP response. `serve($storage, $path, $request, $filename, …)` streams via `StreamedResponse` and answers a single `Range` (`bytes=a-b`, `a-`, `-n`) with `206` + `Content-Range`, an unsatisfiable one with `416` + `Content-Range: bytes */size`, and ignores multi-range/other-unit/inverted headers by sending the whole file. `xAccelRedirect($prefix, $path, …)` and `xSendfile($localDriver, $path, …)` return an empty response with the web-server hand-off header.
+
+**`SignedUrl`** — `make($path, $ttl)` builds `base/path?expires=…&signature=…` (HMAC-SHA256 over `path\nexpires`); `verify()`/`verifyRequest()` check expiry and signature in constant time. `host()` derives the virtual-hosted-style AWS hostname or uses the configured custom endpoint. No external dependencies — only `ext-curl` and PHP hash functions.
 
 **`GcsDriver`** — cURL-based Google Cloud Storage client, using the GCS JSON API (`storage.googleapis.com/storage/v1/...` for metadata/read/delete, `storage.googleapis.com/upload/storage/v1/...` for writes). Authenticates with a caller-supplied OAuth2 Bearer access token — the driver never mints or refreshes tokens itself.
 
@@ -303,6 +315,11 @@ tests/
 - **`InMemoryDriver` is named for what it models, not how it is built** — The sibling test drivers in `cache`, `broadcast`, `feature-flags` and `rate-limiter` are called `ArrayDriver`, but those modules genuinely store key-value pairs. Storage models a filesystem; the backing array is an implementation detail, so the name says "in memory".
 - **`InMemoryDriver` rejects `..` even though it has no root to escape** — A test double must fail the same way the real driver does. If it silently accepted a traversing path, a traversal bug would pass its tests and only surface against `LocalDriver` in production.
 - **`InMemoryDriver::putUploadedFile()` uses the temp-file dance** — `UploadedFile::moveTo()` wraps `move_uploaded_file()`, which requires a genuine HTTP upload and a real destination path, so the file is moved to a temp path, read, and discarded. This mirrors `S3Driver`, which has the same constraint.
+- **Signing is split out of `S3Driver` into `S3Signer`.** `S3Driver` stays the object-storage adapter (paths, multipart, HTTP, hostname); everything that is pure SigV4 math lives in `S3Signer`, which is the part that must match AWS byte for byte and is therefore verified against the published examples. `S3Driver`'s constructor and public API are unchanged.
+- **HTTP serving lives here, on top of `StorageInterface`, not in `ez-php/http`.** `StorageResponse` needs the storage abstraction (`exists`/`getStream`) and `ez-php/http`'s `StreamedResponse`/`Response`, both already dependencies of this module; `ez-php/http` stays storage-agnostic. It is a set of static helpers (no state), not a service, so a controller can call it directly.
+- **Range support requires a seekable stream.** The size comes from `fstat()`, which is only trustworthy for a seekable stream — pipes and sockets (an object stream from a remote driver) report 0. For those, `serve()` ignores `Range` and streams the whole file without `Content-Length` instead of guessing. `If-Range` is not evaluated, and multi-range requests are answered with the whole file, which RFC 9110 permits.
+- **Two ways to protect a file route:** either verify a `SignedUrl` before calling `StorageResponse::serve()`, or let the web server do the transfer (`xAccelRedirect`/`xSendfile`) after your own access check. `LocalDriver::absolutePath()` (new, additive) exists for the latter. `S3Driver` needs neither — `url()` is already a presigned URL.
+- **`SignedUrl` requires a secret of at least 16 bytes and has no single-use tracking.** A link is valid until its expiry; revoke by changing the secret or by shortening the TTL. The clock is injectable (`Closure`) only so tests do not need `sleep()`.
 
 ## Testing approach
 
@@ -319,5 +336,6 @@ tests/
 - Minting or refreshing GCS OAuth2 access tokens — `GcsDriver` only sends the token it is constructed with; obtaining one is the application's responsibility
 - Image resizing or file processing — belongs in a dedicated media module
 - Database-backed file metadata — belongs in the ORM module
-- Serving files via HTTP (X-Accel-Redirect, range requests) — belongs in the framework HTTP layer
+- Routing, authorization and access rules for file downloads — the application's controller decides *who* may fetch a file; this module only builds the response (`StorageResponse`) and the expiring link (`SignedUrl`)
+- Conditional requests (`If-Range`, `ETag`/`If-None-Match`), multi-range (`multipart/byteranges`) responses and a CDN/cache layer — application or reverse-proxy concern
 - File validation (MIME type, size limits) — belongs in `ez-php/validation`

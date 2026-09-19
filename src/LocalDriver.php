@@ -156,6 +156,21 @@ final class LocalDriver implements StorageInterface
     }
 
     /**
+     * Absolute filesystem path of a stored file — for handing the transfer to the web server
+     * (`X-Sendfile`, see `StorageResponse::xSendfile()`). The file need not exist.
+     *
+     * @param string $path Relative storage path.
+     *
+     * @throws StorageException If the path contains a `.` or `..` segment.
+     *
+     * @return string
+     */
+    public function absolutePath(string $path): string
+    {
+        return $this->fullPath($path);
+    }
+
+    /**
      * Resolve a storage-relative path to an absolute filesystem path.
      *
      * @param string $path Relative path.

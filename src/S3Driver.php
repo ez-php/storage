@@ -19,11 +19,7 @@ use EzPhp\Http\UploadedFile;
  */
 final class S3Driver implements StorageInterface
 {
-    private const ALGO = 'AWS4-HMAC-SHA256';
-
-    private const SERVICE = 's3';
-
-    private const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
+    private readonly S3Signer $signer;
 
     /**
      * @param string      $key       AWS access key ID.
@@ -41,8 +37,8 @@ final class S3Driver implements StorageInterface
      *                                       status, lowercased response headers, body). For tests and custom HTTP stacks.
      */
     public function __construct(
-        private readonly string $key,
-        private readonly string $secret,
+        string $key,
+        string $secret,
         private readonly string $region,
         private readonly string $bucket,
         private readonly ?string $endpoint = null,
@@ -51,6 +47,7 @@ final class S3Driver implements StorageInterface
         private readonly int $multipartPartSize = 8_388_608,
         private readonly ?\Closure $transport = null,
     ) {
+        $this->signer = new S3Signer($key, $secret, $region);
     }
 
     /**
@@ -335,34 +332,9 @@ final class S3Driver implements StorageInterface
     {
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
-        $dateShort = substr($date, 0, 8);
-        $objectKey = $this->uriEncodePath('/' . $this->assertSafeRelativePath($path));
-        $scope = "{$dateShort}/{$this->region}/" . self::SERVICE . '/aws4_request';
-        $credential = "{$this->key}/{$scope}";
+        $objectKey = S3Signer::encodePath('/' . $this->assertSafeRelativePath($path));
 
-        $queryParams = [
-            'X-Amz-Algorithm' => self::ALGO,
-            'X-Amz-Credential' => $credential,
-            'X-Amz-Date' => $date,
-            'X-Amz-Expires' => (string) $this->urlExpiry,
-            'X-Amz-SignedHeaders' => 'host',
-        ];
-
-        ksort($queryParams);
-        $queryString = http_build_query($queryParams, '', '&', PHP_QUERY_RFC3986);
-
-        $canonicalRequest = implode("\n", [
-            'GET',
-            $objectKey,
-            $queryString,
-            "host:{$host}\n",
-            'host',
-            self::UNSIGNED_PAYLOAD,
-        ]);
-
-        $signature = $this->sign($canonicalRequest, $date, $dateShort);
-
-        return "https://{$host}{$objectKey}?{$queryString}&X-Amz-Signature={$signature}";
+        return "https://{$host}{$objectKey}?" . $this->signer->presignQuery($host, $objectKey, $this->urlExpiry, $date);
     }
 
     /**
@@ -382,53 +354,29 @@ final class S3Driver implements StorageInterface
     {
         $host = $this->host();
         $date = gmdate('Ymd\THis\Z');
-        $dateShort = substr($date, 0, 8);
-        $objectKey = $this->uriEncodePath('/' . $this->assertSafeRelativePath($path));
-        $payloadHash = hash('sha256', $body);
+        $objectKey = S3Signer::encodePath('/' . $this->assertSafeRelativePath($path));
 
         ksort($query);
         $queryString = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 
-        // Normalize header names to lowercase for canonical request
+        // Normalize header names to lowercase for the canonical request
         $normalized = [];
         foreach ($headers as $name => $value) {
             $normalized[strtolower($name)] = $value;
         }
 
-        $signedHeaders = array_merge($normalized, [
-            'host' => $host,
-            'x-amz-date' => $date,
-            'x-amz-content-sha256' => $payloadHash,
-        ]);
-
-        ksort($signedHeaders);
-
-        $signedHeaderNames = implode(';', array_keys($signedHeaders));
-
-        $canonicalHeaders = '';
-        foreach ($signedHeaders as $name => $value) {
-            $canonicalHeaders .= $name . ':' . trim($value) . "\n";
-        }
-
-        $canonicalRequest = implode("\n", [
+        $signed = $this->signer->signRequest(
             $method,
             $objectKey,
             $queryString,
-            $canonicalHeaders,
-            $signedHeaderNames,
-            $payloadHash,
-        ]);
+            $normalized,
+            hash('sha256', $body),
+            $host,
+            $date,
+        );
 
-        $signature = $this->sign($canonicalRequest, $date, $dateShort);
-
-        $scope = "{$dateShort}/{$this->region}/" . self::SERVICE . '/aws4_request';
-        $authorization = self::ALGO
-            . " Credential={$this->key}/{$scope},"
-            . " SignedHeaders={$signedHeaderNames},"
-            . " Signature={$signature}";
-
-        $curlHeaders = ["Authorization: {$authorization}"];
-        foreach ($signedHeaders as $name => $value) {
+        $curlHeaders = ['Authorization: ' . $signed['authorization']];
+        foreach ($signed['headers'] as $name => $value) {
             if ($name !== 'host') {
                 $curlHeaders[] = $name . ': ' . $value;
             }
@@ -499,68 +447,6 @@ final class S3Driver implements StorageInterface
             'headers' => $responseHeaders,
             'body' => is_string($response) ? $response : '',
         ];
-    }
-
-    /**
-     * Compute an AWS Signature V4 hex signature.
-     *
-     * @param string $canonicalRequest The canonical request string.
-     * @param string $date             Full ISO8601 datetime (e.g. 20240101T120000Z).
-     * @param string $dateShort        Date portion only (e.g. 20240101).
-     *
-     * @return string Lowercase hex signature.
-     */
-    private function sign(string $canonicalRequest, string $date, string $dateShort): string
-    {
-        $scope = "{$dateShort}/{$this->region}/" . self::SERVICE . '/aws4_request';
-
-        $stringToSign = implode("\n", [
-            self::ALGO,
-            $date,
-            $scope,
-            hash('sha256', $canonicalRequest),
-        ]);
-
-        return hash_hmac('sha256', $stringToSign, $this->signingKey($dateShort));
-    }
-
-    /**
-     * Derive the AWS Signature V4 signing key for the current date and region.
-     *
-     * @param string $dateShort Date portion (e.g. 20240101).
-     *
-     * @return string Binary signing key.
-     */
-    private function signingKey(string $dateShort): string
-    {
-        $kDate = hash_hmac('sha256', $dateShort, 'AWS4' . $this->secret, true);
-        $kRegion = hash_hmac('sha256', $this->region, $kDate, true);
-        $kService = hash_hmac('sha256', self::SERVICE, $kRegion, true);
-
-        return hash_hmac('sha256', 'aws4_request', $kService, true);
-    }
-
-    /**
-     * URI-percent-encode an object key path for AWS Signature V4.
-     *
-     * SigV4's canonical-URI construction requires each path segment to be
-     * percent-encoded per RFC 3986 (uppercase hex, unreserved characters
-     * A-Za-z0-9-_.~ left unencoded) before it is used in the canonical request
-     * — and, since the actual request URL must match what was signed, the same
-     * encoding is applied to the URL sent to S3. `/` segment separators are
-     * preserved, never encoded. `rawurlencode()` already implements exactly
-     * this unreserved-character set, so each segment is encoded independently
-     * and rejoined — a single un-split rawurlencode() would also escape `/`.
-     * S3 does not double-encode the canonical URI (unlike most other AWS
-     * services), so this must be applied exactly once.
-     *
-     * @param string $path Leading-slash object key, e.g. '/my folder/file+name.txt'.
-     *
-     * @return string
-     */
-    private function uriEncodePath(string $path): string
-    {
-        return implode('/', array_map(rawurlencode(...), explode('/', $path)));
     }
 
     /**

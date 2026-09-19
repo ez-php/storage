@@ -94,6 +94,52 @@ class AvatarController
 
 ---
 
+## Serving files over HTTP
+
+`StorageResponse` turns a stored file into a response — with `Range` support so browsers can seek in audio/video and resume downloads:
+
+```php
+use EzPhp\Storage\StorageResponse;
+
+// controller: GET /files/{path}
+return StorageResponse::serve($storage, $path, $request, filename: 'report.pdf', contentType: 'application/pdf', inline: true);
+```
+
+| Request | Response |
+|---|---|
+| no `Range` | `200`, `Content-Length`, `Accept-Ranges: bytes` |
+| `Range: bytes=2-5` / `bytes=15-` / `bytes=-4` | `206` + `Content-Range: bytes 2-5/20` |
+| unsatisfiable (`bytes=100-` on a 20-byte file) | `416` + `Content-Range: bytes */20` |
+| several ranges, another unit, malformed | `200`, the whole file |
+| unknown path | `404` |
+
+`Range` needs a seekable stream (local files, in-memory); for a non-seekable remote stream the whole file is streamed without `Content-Length`. `If-Range` is not evaluated.
+
+**Let the web server send the file** (PHP only checks access):
+
+```php
+// nginx:  location /protected/ { internal; alias /var/www/storage/app/; }
+return StorageResponse::xAccelRedirect('/protected', $path, 'report.pdf', 'application/pdf');
+
+// Apache mod_xsendfile / lighttpd, LocalDriver only:
+return StorageResponse::xSendfile($localDriver, $path, 'report.pdf', 'application/pdf');
+```
+
+**Expiring links for the `LocalDriver`** (the S3 driver's `url()` is already presigned):
+
+```php
+$signer = new SignedUrl($_ENV['FILES_SECRET'], 'https://app.test/files');   // secret >= 16 bytes
+$link   = $signer->make('reports/2026.pdf', ttl: 600);                     // …?expires=…&signature=…
+
+// in the /files/{path} handler
+if (!$signer->verifyRequest($path, $request)) {
+    return new Response('Forbidden', 403);
+}
+return StorageResponse::serve($storage, $path, $request, basename($path));
+```
+
+The signature is HMAC-SHA256 over the path and the expiry, compared in constant time; changing either invalidates it. A link is valid until it expires (no single-use tracking).
+
 ## Drivers
 
 ### LocalDriver
