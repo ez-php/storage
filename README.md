@@ -20,28 +20,28 @@ Add `config/storage.php` to your application:
 
 ```php
 return [
-    'driver' => env('STORAGE_DRIVER', 'local'),
+    'driver' => getenv('STORAGE_DRIVER') ?: 'local',
 
     'local' => [
-        'root' => env('STORAGE_ROOT', storage_path('app')),
-        'url'  => env('STORAGE_URL', ''),
+        'root' => getenv('STORAGE_ROOT') ?: 'storage/app',
+        'url'  => getenv('STORAGE_URL') ?: '',
     ],
 
     's3' => [
-        'key'        => env('AWS_ACCESS_KEY_ID'),
-        'secret'     => env('AWS_SECRET_ACCESS_KEY'),
-        'region'     => env('AWS_DEFAULT_REGION', 'us-east-1'),
-        'bucket'     => env('AWS_BUCKET'),
-        'endpoint'   => env('AWS_ENDPOINT'),   // optional: MinIO, R2, etc.
-        'url'        => env('AWS_URL'),         // optional: CDN base URL
+        'key'        => getenv('AWS_ACCESS_KEY_ID') ?: null,
+        'secret'     => getenv('AWS_SECRET_ACCESS_KEY') ?: null,
+        'region'     => getenv('AWS_DEFAULT_REGION') ?: 'us-east-1',
+        'bucket'     => getenv('AWS_BUCKET') ?: null,
+        'endpoint'   => getenv('AWS_ENDPOINT') ?: null,   // optional: MinIO, R2, etc.
+        'url'        => getenv('AWS_URL') ?: null,         // optional: CDN base URL
         'url_expiry' => 3600,
         'multipart_part_size' => 8 * 1024 * 1024, // putStream(): larger streams use multipart upload
     ],
 
     'gcs' => [
-        'bucket'       => env('GCS_BUCKET'),
-        'access_token' => env('GCS_ACCESS_TOKEN'), // OAuth2 Bearer token; caller refreshes it
-        'url'          => env('GCS_URL'),          // optional: CDN base URL
+        'bucket'       => getenv('GCS_BUCKET') ?: null,
+        'access_token' => getenv('GCS_ACCESS_TOKEN') ?: null, // OAuth2 Bearer token; caller refreshes it
+        'url'          => getenv('GCS_URL') ?: null,          // optional: CDN base URL
     ],
 ];
 ```
