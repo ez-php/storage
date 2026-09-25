@@ -148,9 +148,11 @@ php make_module.php <name> --description="..." --services=mysql,redis
 ```
 
 `<name>` is the kebab-case package name; the namespace is derived as
-`EzPhp\<PascalCase>` unless `--namespace=` overrides it (`bignum` → `BigNum`,
-`opcache` → `OPCache`, and `dotenv` → `Env` are existing exceptions the guess
-gets wrong; `websocket-client` → `WebsocketClient`, `websocket-tls` → `WebsocketTls`,
+`EzPhp\<PascalCase>` (each `-`-separated word upper-cased) unless `--namespace=`
+overrides it. Existing exceptions the guess gets wrong: `bignum` → `BigNum`,
+`dataloader` → `DataLoader`, `dotenv` → `Env`, `graphql` → `GraphQL`, `oauth` → `OAuth`,
+`opcache` → `OPCache`, `swagger-ui` → `SwaggerUI`, `webauthn` → `WebAuthn` and
+`websocket` → `WebSocket`; `websocket-client` → `WebsocketClient`, `websocket-tls` → `WebsocketTls`,
 `webauthn-metadata` → `WebauthnMetadata` and `metrics-statsd` → `MetricsStatsd` are
 intentional lower-case-word namespaces, and `testing-application` shares `EzPhp\Testing\`
 with `testing`).
@@ -170,17 +172,21 @@ stub is written only if the submodule doesn't already ship one, so
 `composer guidelines:sync` has a `# Package:` heading to anchor part 1 against.
 
 It writes `modules/<name>/` and registers the module in the four places the monorepo
-needs it — root `composer.json` (`autoload.psr-4`), `phpstan.neon`, `phpunit.xml`
-(test suite **and** coverage source), and `packages.sh` (alphabetical position).
+needs it — root `composer.json` (`autoload.psr-4` **and** the shared
+`autoload-dev` `Tests\` directory list), `phpstan.neon`, `phpunit.xml` (test suite
+**and** coverage source), and `packages.sh` (alphabetical position) — in both
+generated and `--repo` mode.
 
 Two things stay manual on purpose:
 
 - **`CLAUDE.md` part 1** — only the `# Package:` section is generated. Run
   `composer guidelines:sync` afterwards; baking a guidelines copy into the generator
   would recreate the drift the sync script exists to prevent.
-- **The host-port table below** (`--services` only) — editing it marks every
-  `CLAUDE.md` copy as drifted at once, so the next `composer full` would fail for
-  a brand-new module. The generator prints which ports to claim instead.
+- **The host-port table below** (`--services` only) — claim the "next free" row by
+  editing the table in `CODING_GUIDELINES.md` (never in a `CLAUDE.md` copy) and run
+  `composer guidelines:sync` in the same change. Editing it drifts every `CLAUDE.md`
+  until the sync runs, which is why the generator only reminds you instead of doing
+  it. Skipping the edit leaves "next free" stale, so the next module collides.
 
 ### 4 — Docker scaffold
 
@@ -273,6 +279,7 @@ tests/
   StorageResponseTest.php     — Range parsing (closed/open/suffix/clamped/unsatisfiable/ignored), 206/416/404, headers, X-Accel-Redirect, X-Sendfile
   SignedUrlTest.php           — signing, expiry boundary, tampering with path/expiry/secret, malformed parts, verifyRequest()
   GcsDriverTest.php           — integration tests; skipped without GCS credentials
+  GcsDriverTransportTest.php  — unit tests via the fake transport: request URLs/headers/bodies, status → result/exception mapping, streams, url(), path traversal
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
 ```
@@ -312,7 +319,7 @@ tests/
 - **Virtual-hosted-style S3 URLs** — the bucket is part of the hostname (`bucket.s3.region.amazonaws.com`), not the path. Custom endpoint support enables MinIO and Cloudflare R2 compatibility.
 - **Presigned URLs** — `S3Driver::url()` generates presigned GET URLs signed with `UNSIGNED-PAYLOAD`. Expiry defaults to 3600 seconds and is configurable. If a CDN `url` is set in config, direct CDN URLs are returned instead.
 - **`putStream()` uses multipart upload above `multipartPartSize` (default 8 MiB).** The stream is read one part at a time, so the object is never held in memory. A stream that fits in one part (peeked by reading a second chunk) still uses a single PutObject. Flow: `POST ?uploads` → `PUT ?partNumber&uploadId` per part (ETag from the response header) → `POST ?uploadId` with the part list. Any failure — non-2xx part, an `<Error>` body on a 200 Complete response, or an exception — triggers a best-effort `DELETE ?uploadId` so orphaned parts don't accrue charges; non-2xx returns `false` like `put()`, transport exceptions propagate. S3 requires parts ≥ 5 MiB (except the last); the driver does not enforce it, so tiny part sizes are for tests only. The query string is part of the SigV4 canonical request (sorted, RFC 3986-encoded).
-- **`S3Driver` gained an injectable HTTP `transport`** (optional last constructor argument, default cURL). It exists so the multipart protocol is unit-testable against a fake S3 instead of only against live credentials; `S3DriverTest` (live) is unchanged. `GcsDriver` still has no such seam. `put()`/`get()`/`delete()`/`exists()` are unchanged. `putUploadedFile()` still reads the file fully via `put()`.
+- **`S3Driver` gained an injectable HTTP `transport`** (optional last constructor argument, default cURL). It exists so the multipart protocol is unit-testable against a fake S3 instead of only against live credentials; `S3DriverTest` (live) is unchanged. `GcsDriver` has the same optional `transport` seam (method, URL, header lines, body → status + body), so its request construction and status mapping are unit-tested without credentials (`GcsDriverTransportTest`). `put()`/`get()`/`delete()`/`exists()` are unchanged. `putUploadedFile()` still reads the file fully via `put()`.
 - **`GcsDriver` does not generate signed URLs** — unlike `S3Driver`, `GcsDriver::url()` returns a direct `storage.googleapis.com/{bucket}/{path}` URL (or a configured CDN `url` prefix), never a signed/expiring one. A true GCS V4 signed URL requires a service-account private key to sign with, which is a materially different (and heavier) auth story than the Bearer-token access-token approach used for every other request — out of scope here; put a CDN or a bucket/object ACL in front instead. This is a deliberate, documented limitation, not an oversight.
 - **Streaming is supported alongside the string API** — `put()`/`get()` operate on strings; `getStream()`/`putStream()` avoid materialising large files. `LocalDriver` uses `stream_copy_to_stream()`, `S3Driver` pipes the object body into a memory stream, `InMemoryDriver` wraps `php://memory`.
 - **`InMemoryDriver` is named for what it models, not how it is built** — The sibling test drivers in `cache`, `broadcast`, `feature-flags` and `rate-limiter` are called `ArrayDriver`, but those modules genuinely store key-value pairs. Storage models a filesystem; the backing array is an implementation detail, so the name says "in memory".
@@ -329,7 +336,7 @@ tests/
 - **No external services required** — LocalDriver tests use PHP's `sys_get_temp_dir()` and clean up after themselves.
 - **S3 integration tests are skipped** by default (`markTestSkipped` when credentials are absent). Run them by setting `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_BUCKET`.
 - **Multipart tests use a fake transport** injected into `S3Driver`, asserting the request sequence (initiate/parts/complete/abort), part bodies, the ETag part list, SigV4 headers on every call, key encoding and every failure path.
-- **GCS integration tests are skipped** the same way, unless `GCS_BUCKET` and `GCS_ACCESS_TOKEN` are set. Like `S3Driver`, `GcsDriver` has no mockable HTTP seam, so its behavior is only verified against a real bucket.
+- **GCS integration tests are skipped** the same way, unless `GCS_BUCKET` and `GCS_ACCESS_TOKEN` are set. The live `GcsDriverTest` only adds an end-to-end check; request construction and error mapping are covered by `GcsDriverTransportTest` via the injectable `transport`.
 - `StorageTest` tests the static façade isolation using `resetInstance()` in setUp/tearDown.
 - No framework application context is needed — `TestCase` extends plain `PHPUnit\Framework\TestCase`.
 

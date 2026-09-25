@@ -30,11 +30,15 @@ final class GcsDriver implements StorageInterface
      * @param string      $accessToken OAuth2 Bearer access token.
      * @param string|null $url         Custom public/CDN base URL. When null,
      *                                 `url()` returns a direct public bucket URL.
+     * @param (\Closure(string, string, list<string>, string): array{status: int, body: string})|null $transport
+     *                                 Replaces the cURL call — receives method, URL, headers
+     *                                 (including `Authorization`) and body. For tests; null uses cURL.
      */
     public function __construct(
         private readonly string $bucket,
         private readonly string $accessToken,
         private readonly ?string $url = null,
+        private readonly ?\Closure $transport = null,
     ) {
     }
 
@@ -205,15 +209,19 @@ final class GcsDriver implements StorageInterface
             throw new StorageException('Invalid request parameters.');
         }
 
+        $curlHeaders = array_values(array_merge([
+            'Authorization: Bearer ' . $this->accessToken,
+        ], $headers));
+
+        if ($this->transport !== null) {
+            return ($this->transport)($method, $url, $curlHeaders, $body);
+        }
+
         $ch = curl_init();
 
         if ($ch === false) {
             throw new StorageException('Failed to initialize cURL.');
         }
-
-        $curlHeaders = array_merge([
-            'Authorization: Bearer ' . $this->accessToken,
-        ], $headers);
 
         curl_setopt_array($ch, [
             CURLOPT_URL => $url,
