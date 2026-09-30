@@ -194,12 +194,18 @@ final class LocalDriver implements StorageInterface
      *
      * @param string $path Relative path as supplied by the caller.
      *
-     * @throws StorageException If the path contains a `.` or `..` segment.
+     * @throws StorageException If the path contains a `.` or `..` segment or a NUL byte.
      *
      * @return string The path, unmodified, once validated.
      */
     private function assertSafeRelativePath(string $path): string
     {
+        // Filesystem functions reject a NUL byte with a ValueError; surface it as
+        // the module's own exception, like any other unsafe path.
+        if (str_contains($path, "\0")) {
+            throw new StorageException('Invalid path: contains a NUL byte.');
+        }
+
         $trimmed = ltrim($path, '/');
 
         foreach (explode('/', $trimmed) as $segment) {

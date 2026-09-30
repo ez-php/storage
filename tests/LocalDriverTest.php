@@ -85,6 +85,24 @@ final class LocalDriverTest extends TestCase
         $this->driver->put('../escape.txt', 'nope');
     }
 
+    public function testPutRejectsNulByteWithStorageException(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->put("avatar.png\0.php", 'nope');
+    }
+
+    public function testGetRejectsNulByteWithStorageException(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->get("dir/\0file.txt");
+    }
+
+    public function testExistsRejectsNulByteWithStorageException(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->driver->exists("a\0b");
+    }
+
     public function testPutRejectsPathTraversalInNestedSegment(): void
     {
         $this->expectException(StorageException::class);

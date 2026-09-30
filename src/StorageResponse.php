@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EzPhp\Storage;
 
-use EzPhp\Http\HeaderValidator;
 use EzPhp\Http\RequestInterface;
 use EzPhp\Http\Response;
 use EzPhp\Http\ResponseInterface;
@@ -271,7 +270,8 @@ final class StorageResponse
     /**
      * RFC 6266 Content-Disposition with an ASCII fallback and a UTF-8 `filename*`; the fallback
      * drops `"`, `\` and non-printable characters, `filename*` is percent-encoded, so neither can
-     * carry CR/LF or break out of the quoted string.
+     * carry CR/LF or break out of the quoted string. The value is additionally validated by the
+     * `StreamedResponse` constructor / `withHeader()` it is handed to.
      *
      * @param string $filename
      * @param bool   $inline
@@ -281,11 +281,8 @@ final class StorageResponse
     private static function contentDisposition(string $filename, bool $inline): string
     {
         $fallback = (string) preg_replace('/[^\x20-\x7E]|["\\\\]/', '', $filename);
-        $value = sprintf('%s; filename="%s"; filename*=UTF-8\'\'%s', $inline ? 'inline' : 'attachment', $fallback, rawurlencode($filename));
 
-        HeaderValidator::assertValid('Content-Disposition', $value);
-
-        return $value;
+        return sprintf('%s; filename="%s"; filename*=UTF-8\'\'%s', $inline ? 'inline' : 'attachment', $fallback, rawurlencode($filename));
     }
 
     /**
