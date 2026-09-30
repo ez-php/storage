@@ -182,6 +182,127 @@ final class LocalDriverTest extends TestCase
         $this->driver->putUploadedFile('test.txt', $file);
     }
 
+    public function testGetStreamReturnsReadableResource(): void
+    {
+        $this->driver->put('stream/read.txt', 'streamed contents');
+
+        $stream = $this->driver->getStream('stream/read.txt');
+
+        $this->assertIsResource($stream);
+        $this->assertSame('streamed contents', stream_get_contents($stream));
+        fclose($stream);
+    }
+
+    public function testGetStreamThrowsForMissingFile(): void
+    {
+        $this->expectException(StorageException::class);
+        $this->expectExceptionMessage('File not found: missing.txt');
+
+        $this->driver->getStream('missing.txt');
+    }
+
+    public function testGetStreamRejectsPathTraversal(): void
+    {
+        $this->expectException(StorageException::class);
+
+        $this->driver->getStream('../outside.txt');
+    }
+
+    public function testPutStreamCopiesResourceIntoNestedDirectory(): void
+    {
+        $source = fopen('php://memory', 'w+b');
+        $this->assertIsResource($source);
+        fwrite($source, 'from a stream');
+        rewind($source);
+
+        $this->assertTrue($this->driver->putStream('a/b/c.txt', $source));
+        fclose($source);
+
+        $this->assertSame('from a stream', $this->driver->get('a/b/c.txt'));
+    }
+
+    public function testPutStreamRejectsAClosedResource(): void
+    {
+        // A closed stream still has PHPStan's `resource` type but fails is_resource(),
+        // which is the guard's real job (a string would already fail static analysis).
+        $source = fopen('php://memory', 'rb');
+        $this->assertIsResource($source);
+        fclose($source);
+
+        $this->expectException(StorageException::class);
+        $this->expectExceptionMessage('putStream() requires a valid resource.');
+
+        $this->driver->putStream('x.txt', $source);
+    }
+
+    public function testAbsolutePathResolvesInsideRoot(): void
+    {
+        $this->assertSame($this->tmpDir . '/docs/report.pdf', $this->driver->absolutePath('docs/report.pdf'));
+    }
+
+    public function testAbsolutePathRejectsParentSegments(): void
+    {
+        $this->expectException(StorageException::class);
+
+        $this->driver->absolutePath('docs/../../etc/passwd');
+    }
+
+    /**
+     * move_uploaded_file() only accepts files from a real HTTP upload, so this
+     * posts a multipart request to a `php -S` loopback server whose router
+     * (Support/upload-server.php) calls putUploadedFile().
+     */
+    public function testPutUploadedFileStoresARealUpload(): void
+    {
+        if (!extension_loaded('curl')) {
+            $this->markTestSkipped('ext-curl is required to post the upload.');
+        }
+
+        $socket = stream_socket_server('tcp://127.0.0.1:0');
+        $this->assertNotFalse($socket);
+        $address = (string) stream_socket_get_name($socket, false);
+        fclose($socket);
+
+        $server = proc_open(
+            [PHP_BINARY, '-S', $address, __DIR__ . '/Support/upload-server.php'],
+            [1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
+            $pipes,
+            null,
+            ['UPLOAD_TEST_ROOT' => $this->tmpDir],
+        );
+        $this->assertIsResource($server);
+
+        try {
+            [$host, $port] = explode(':', $address);
+            $deadline = microtime(true) + 5;
+
+            while (($probe = @fsockopen($host, (int) $port, $errno, $errstr, 0.2)) === false && microtime(true) < $deadline) {
+                usleep(50_000);
+            }
+
+            $this->assertNotFalse($probe, 'The loopback server did not start.');
+            fclose($probe);
+
+            $upload = $this->tmpDir . '/client-upload.txt';
+            file_put_contents($upload, 'uploaded bytes');
+
+            $ch = curl_init('http://' . $address . '/');
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => ['file' => new \CURLFile($upload, 'text/plain', 'client-upload.txt')],
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT => 10,
+            ]);
+            $body = curl_exec($ch);
+
+            $this->assertSame('stored', $body);
+            $this->assertSame('uploaded bytes', $this->driver->get('uploads/nested/stored.txt'));
+        } finally {
+            proc_terminate($server);
+            proc_close($server);
+        }
+    }
+
     /**
      * Recursively remove a directory and its contents.
      *

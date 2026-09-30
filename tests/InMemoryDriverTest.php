@@ -173,10 +173,10 @@ final class InMemoryDriverTest extends TestCase
         fclose($source);
     }
 
-    // putStream()'s non-resource guard is deliberately not tested: the parameter
-    // is documented `@param resource`, so passing a string fails PHPStan level 9
-    // before the guard can run. LocalDriver's identical guard is untested for the
-    // same reason.
+    // putStream()'s non-resource guard is not tested here: the parameter is
+    // documented `@param resource`, so passing a string fails PHPStan level 9.
+    // LocalDriverTest reaches the identical guard with a closed stream, which
+    // keeps the `resource` type but fails is_resource().
 
     public function testStreamRoundTrip(): void
     {
