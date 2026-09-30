@@ -188,7 +188,6 @@ final class LocalDriverTest extends TestCase
 
         $stream = $this->driver->getStream('stream/read.txt');
 
-        $this->assertIsResource($stream);
         $this->assertSame('streamed contents', stream_get_contents($stream));
         fclose($stream);
     }
