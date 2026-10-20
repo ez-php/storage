@@ -13,7 +13,9 @@ use EzPhp\Http\UploadedFile;
  * using cURL and AWS Signature Version 4.
  *
  * Uses virtual-hosted-style URLs: https://{bucket}.s3.{region}.amazonaws.com/{key}.
- * A custom endpoint overrides the default AWS endpoint (e.g. for MinIO).
+ * A custom endpoint overrides the default AWS endpoint (e.g. for MinIO); an
+ * explicit `http://` scheme on it is kept (local MinIO/LocalStack without TLS),
+ * any other endpoint is reached over HTTPS.
  *
  * @package EzPhp\Storage
  */
@@ -334,7 +336,7 @@ final class S3Driver implements StorageInterface
         $date = gmdate('Ymd\THis\Z');
         $objectKey = S3Signer::encodePath('/' . $this->assertSafeRelativePath($path));
 
-        return "https://{$host}{$objectKey}?" . $this->signer->presignQuery($host, $objectKey, $this->urlExpiry, $date);
+        return $this->scheme() . "://{$host}{$objectKey}?" . $this->signer->presignQuery($host, $objectKey, $this->urlExpiry, $date);
     }
 
     /**
@@ -382,7 +384,7 @@ final class S3Driver implements StorageInterface
             }
         }
 
-        $url = 'https://' . $host . $objectKey . ($queryString !== '' ? '?' . $queryString : '');
+        $url = $this->scheme() . '://' . $host . $objectKey . ($queryString !== '' ? '?' . $queryString : '');
 
         if ($this->transport !== null) {
             return ($this->transport)($method, $url, $curlHeaders, $body);
@@ -490,5 +492,16 @@ final class S3Driver implements StorageInterface
         }
 
         return "{$this->bucket}.s3.{$this->region}.amazonaws.com";
+    }
+
+    /**
+     * URL scheme for requests and presigned URLs: `http` only when the custom
+     * endpoint says so explicitly, `https` otherwise.
+     *
+     * @return string
+     */
+    private function scheme(): string
+    {
+        return $this->endpoint !== null && str_starts_with(strtolower($this->endpoint), 'http://') ? 'http' : 'https';
     }
 }

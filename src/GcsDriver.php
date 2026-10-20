@@ -17,13 +17,20 @@ use EzPhp\Http\UploadedFile;
  * workload-identity token in production) and refreshing it as needed; this
  * driver only ever sends the token it was constructed with.
  *
+ * With a service-account client email and private key, `url()` returns an
+ * expiring V4 signed URL (GcsSigner, ext-openssl) instead of the public
+ * object URL — the key is used for URL signing only, uploads and reads still
+ * use the Bearer token.
+ *
  * @package EzPhp\Storage
  */
 final class GcsDriver implements StorageInterface
 {
-    private const string API_BASE = 'https://storage.googleapis.com/storage/v1/b';
+    private const string DEFAULT_ENDPOINT = 'https://storage.googleapis.com';
 
-    private const string UPLOAD_BASE = 'https://storage.googleapis.com/upload/storage/v1/b';
+    private readonly ?GcsSigner $signer;
+
+    private readonly string $endpoint;
 
     /**
      * @param string      $bucket      GCS bucket name.
@@ -33,13 +40,29 @@ final class GcsDriver implements StorageInterface
      * @param (\Closure(string, string, list<string>, string): array{status: int, body: string})|null $transport
      *                                 Replaces the cURL call — receives method, URL, headers
      *                                 (including `Authorization`) and body. For tests; null uses cURL.
+     * @param string|null $clientEmail Service-account email for V4 signed URLs (with $privateKey).
+     * @param string|null $privateKey  PEM RSA private key of that service account.
+     * @param int         $urlExpiry   Signed-URL lifetime in seconds (max 7 days).
+     * @param (\Closure(): int)|null $clock Current Unix time for signing; null = time().
+     * @param string|null $endpoint    API base URL instead of https://storage.googleapis.com — e.g. a local
+     *                                 emulator (fake-gcs-server). Also the base of the public object URL;
+     *                                 V4 signed URLs always target storage.googleapis.com.
      */
     public function __construct(
         private readonly string $bucket,
         private readonly string $accessToken,
         private readonly ?string $url = null,
         private readonly ?\Closure $transport = null,
+        ?string $clientEmail = null,
+        ?string $privateKey = null,
+        private readonly int $urlExpiry = 3600,
+        private readonly ?\Closure $clock = null,
+        ?string $endpoint = null,
     ) {
+        $this->endpoint = rtrim($endpoint !== null && $endpoint !== '' ? $endpoint : self::DEFAULT_ENDPOINT, '/');
+        $this->signer = $clientEmail !== null && $clientEmail !== '' && $privateKey !== null && $privateKey !== ''
+            ? new GcsSigner($clientEmail, $privateKey)
+            : null;
     }
 
     /**
@@ -48,7 +71,7 @@ final class GcsDriver implements StorageInterface
     public function put(string $path, string $contents): bool
     {
         $objectPath = $this->assertSafeRelativePath($path);
-        $url = self::UPLOAD_BASE . '/' . rawurlencode($this->bucket)
+        $url = $this->endpoint . '/upload/storage/v1/b/' . rawurlencode($this->bucket)
             . '/o?uploadType=media&name=' . rawurlencode($objectPath);
 
         $response = $this->request('POST', $url, $contents, [
@@ -64,7 +87,7 @@ final class GcsDriver implements StorageInterface
     public function get(string $path): string
     {
         $objectPath = $this->assertSafeRelativePath($path);
-        $url = self::API_BASE . '/' . rawurlencode($this->bucket)
+        $url = $this->endpoint . '/storage/v1/b/' . rawurlencode($this->bucket)
             . '/o/' . rawurlencode($objectPath) . '?alt=media';
 
         $response = $this->request('GET', $url);
@@ -86,7 +109,7 @@ final class GcsDriver implements StorageInterface
     public function delete(string $path): bool
     {
         $objectPath = $this->assertSafeRelativePath($path);
-        $url = self::API_BASE . '/' . rawurlencode($this->bucket)
+        $url = $this->endpoint . '/storage/v1/b/' . rawurlencode($this->bucket)
             . '/o/' . rawurlencode($objectPath);
 
         $response = $this->request('DELETE', $url);
@@ -100,7 +123,7 @@ final class GcsDriver implements StorageInterface
     public function exists(string $path): bool
     {
         $objectPath = $this->assertSafeRelativePath($path);
-        $url = self::API_BASE . '/' . rawurlencode($this->bucket)
+        $url = $this->endpoint . '/storage/v1/b/' . rawurlencode($this->bucket)
             . '/o/' . rawurlencode($objectPath);
 
         $response = $this->request('GET', $url);
@@ -110,6 +133,9 @@ final class GcsDriver implements StorageInterface
 
     /**
      * {@inheritdoc}
+     *
+     * A configured CDN/public `$url` base wins; otherwise a V4 signed URL valid for
+     * `$urlExpiry` seconds when signing credentials are set, else the public object URL.
      */
     public function url(string $path): string
     {
@@ -119,7 +145,32 @@ final class GcsDriver implements StorageInterface
             return rtrim($this->url, '/') . '/' . $objectPath;
         }
 
-        return 'https://storage.googleapis.com/' . $this->bucket . '/' . $objectPath;
+        if ($this->signer !== null) {
+            return $this->signedUrl($path, $this->urlExpiry);
+        }
+
+        return $this->endpoint . '/' . $this->bucket . '/' . $objectPath;
+    }
+
+    /**
+     * An expiring V4 signed GET URL for the object, independent of the configured CDN URL.
+     *
+     * @param string $path Relative object path.
+     * @param int    $ttl  Seconds the URL stays valid (max 7 days).
+     *
+     * @throws StorageException Without signing credentials, or for an invalid path/expiry/key.
+     *
+     * @return string
+     */
+    public function signedUrl(string $path, int $ttl): string
+    {
+        if ($this->signer === null) {
+            throw new StorageException('GCS signed URLs need a service-account client email and private key.');
+        }
+
+        $now = $this->clock !== null ? ($this->clock)() : time();
+
+        return $this->signer->signedUrl($this->bucket, $this->assertSafeRelativePath($path), $ttl, $now);
     }
 
     /**

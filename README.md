@@ -42,6 +42,7 @@ return [
         'bucket'       => getenv('GCS_BUCKET') ?: null,
         'access_token' => getenv('GCS_ACCESS_TOKEN') ?: null, // OAuth2 Bearer token; caller refreshes it
         'url'          => getenv('GCS_URL') ?: null,          // optional: CDN base URL
+        'endpoint'     => getenv('GCS_ENDPOINT') ?: null,     // optional: API base, e.g. a local emulator
     ],
 ];
 ```
@@ -158,7 +159,7 @@ Uploads and retrieves objects using cURL with AWS Signature Version 4. Works wit
 
 - `url()` returns a presigned GET URL (valid for `url_expiry` seconds)
 - If a custom `url` (CDN) is configured, `url()` returns `{url}/{path}` instead
-- Custom `endpoint` overrides the default `{bucket}.s3.{region}.amazonaws.com` host
+- Custom `endpoint` overrides the default `{bucket}.s3.{region}.amazonaws.com` host; an explicit `http://` scheme is kept (a local MinIO/LocalStack without TLS), any other endpoint is reached over HTTPS
 - `putStream()` uploads streams larger than `multipart_part_size` (default 8 MiB) with S3 multipart upload, one part in memory at a time; failed uploads are aborted. Parts must be ≥ 5 MiB except the last (S3 rule).
 
 ```php
@@ -174,15 +175,21 @@ authenticated with a Bearer access token you supply (e.g. from
 `gcloud auth print-access-token`, or a workload-identity/metadata-server token in
 production). The driver never mints or refreshes tokens itself.
 
-- `url()` returns a direct `https://storage.googleapis.com/{bucket}/{path}` URL — no
-  signed URLs, since that requires a service-account private key rather than a Bearer
-  token. Put a CDN or a bucket/object ACL in front for controlled public access.
+- `url()` returns a direct `https://storage.googleapis.com/{bucket}/{path}` URL by default.
+- With a service-account **client email and private key**, `url()` returns an expiring
+  **V4 signed URL** (`GOOG4-RSA-SHA256`, `urlExpiry` seconds, max 7 days); `signedUrl($path, $ttl)`
+  picks the lifetime per call. The key only signs URLs (ext-openssl) — requests still use the
+  Bearer token, and no OAuth2 tokens are minted.
 - If a custom `url` (CDN) is configured, `url()` returns `{url}/{path}` instead.
+- `endpoint` (`storage.gcs.endpoint` / `GCS_ENDPOINT`) replaces `https://storage.googleapis.com` as the API base — e.g. `http://localhost:4443` for a local fake-gcs-server. Public object URLs use it too; V4 signed URLs always target Google.
 
 ```php
 $driver = new GcsDriver('my-bucket', $accessToken);
 $driver->put('report.pdf', file_get_contents('/tmp/report.pdf'));
 $driver->url('report.pdf'); // https://storage.googleapis.com/my-bucket/report.pdf
+
+$signing = new GcsDriver('my-bucket', $accessToken, clientEmail: $sa['client_email'], privateKey: $sa['private_key']);
+$signing->signedUrl('report.pdf', 600); // https://storage.googleapis.com/my-bucket/report.pdf?X-Goog-Algorithm=GOOG4-RSA-SHA256&…
 ```
 
 ### InMemoryDriver (tests only)

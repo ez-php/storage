@@ -29,6 +29,9 @@
         "ez-php/contracts": "^2.0",
         "ez-php/http": "^2.0"
     },
+    "suggest": {
+        "ext-openssl": "Needed for GcsSigner (GCS V4 signed URLs from a service-account key)"
+    },
     "require-dev": {
         "ez-php/docker": "^2.0",
         "phpunit/phpunit": "^13.0",

@@ -103,11 +103,20 @@ final class StorageServiceProvider extends ServiceProvider
         $bucket = $config->get('storage.gcs.bucket', '');
         $accessToken = $config->get('storage.gcs.access_token', '');
         $url = $config->get('storage.gcs.url');
+        $clientEmail = $config->get('storage.gcs.client_email');
+        $privateKey = $config->get('storage.gcs.private_key');
+        $urlExpiry = $config->get('storage.gcs.url_expiry', 3600);
+        $endpoint = $config->get('storage.gcs.endpoint');
 
         return new GcsDriver(
             is_string($bucket) ? $bucket : '',
             is_string($accessToken) ? $accessToken : '',
             is_string($url) ? $url : null,
+            clientEmail: is_string($clientEmail) ? $clientEmail : null,
+            // Keys from a single-line env var carry literal "\n" sequences.
+            privateKey: is_string($privateKey) ? str_replace('\\n', "\n", $privateKey) : null,
+            urlExpiry: is_int($urlExpiry) ? $urlExpiry : 3600,
+            endpoint: is_string($endpoint) && $endpoint !== '' ? $endpoint : null,
         );
     }
 }
