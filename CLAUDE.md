@@ -299,6 +299,7 @@ tests/
   GcsSignedUrlTest.php        — V4 URL shape and an RSA signature verified with a generated key's public half; expiry bounds, invalid key, driver url()/signedUrl() precedence
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
+  StorageServiceProviderTest.php  — Smoke test: StorageServiceProvider registers its binding in a minimal container context without error
 ```
 
 ## Key classes and responsibilities
