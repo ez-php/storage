@@ -296,6 +296,9 @@ tests/
   S3DriverHttpTest.php        — the driver's own cURL layer against the loopback server over an explicit `http://` endpoint: signing, status mapping, streams, scheme handling, connection error, upload guards
   Support/StorageLoopbackServer.php — starts/stops the `php -S` loopback server for the two *HttpTest classes
   Support/storage-api-server.php    — its router: 404 on `missing`, 500 on `broken`, JSON echo of method/URI/Authorization/body otherwise
+  Support/upload-server.php         — router for the `php -S` loopback server started by LocalDriverTest
+  Support/FakeConfig.php            — minimal ConfigInterface stub for service provider tests
+  Support/FakeContainer.php         — minimal ContainerInterface stub for service provider tests
   GcsSignedUrlTest.php        — V4 URL shape and an RSA signature verified with a generated key's public half; expiry bounds, invalid key, driver url()/signedUrl() precedence
   InMemoryDriverTest.php      — mirrors LocalDriverTest's contract surface; no infrastructure
   StorageTest.php             — tests for the Storage static façade
