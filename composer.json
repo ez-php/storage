@@ -1,6 +1,6 @@
 {
     "name": "ez-php/storage",
-    "version": "2.6.5",
+    "version": "2.7.0",
     "description": "File storage abstraction for the ez-php framework — local filesystem and S3-compatible drivers",
     "type": "library",
     "license": "MIT",
@@ -26,14 +26,14 @@
     "require": {
         "php": "^8.5",
         "ext-curl": "*",
-        "ez-php/contracts": "^2.6.0",
-        "ez-php/http": "^2.6.0"
+        "ez-php/contracts": "^2.7.0",
+        "ez-php/http": "^2.7.0"
     },
     "suggest": {
         "ext-openssl": "Needed for GcsSigner (GCS V4 signed URLs from a service-account key)"
     },
     "require-dev": {
-        "ez-php/docker": "^2.6.0",
+        "ez-php/docker": "^2.7.0",
         "phpunit/phpunit": "^13.0",
         "phpstan/phpstan": "^2.1",
         "friendsofphp/php-cs-fixer": "^3.94",
